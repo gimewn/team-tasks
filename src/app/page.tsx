@@ -1,158 +1,171 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { ArrowRightIcon, ClockIcon, AlertCircleIcon } from 'lucide-react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Header } from '@/components/layout/Header';
-import { DashboardStats } from '@/components/dashboard/DashboardStats';
-import { TaskCard } from '@/components/tasks/TaskCard';
-import { TaskDetail } from '@/components/tasks/TaskDetail';
-import { TaskForm } from '@/components/tasks/TaskForm';
-import { useTaskStore } from '@/lib/store';
-import type { Task, TaskStatus } from '@/lib/types';
-import { isOverdue, isDueSoon } from '@/lib/utils';
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import type { Tables } from '@/lib/database.types'
+import { createClient } from '@/lib/supabase/client'
 
-export default function DashboardPage() {
-  const { tasks, members, addTask, updateTask, deleteTask, moveTask } = useTaskStore();
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [formTask, setFormTask] = useState<Task | null>(null);
+type Task = Tables<'tasks'>
 
-  const inProgressTasks = tasks.filter((t) => t.status === 'in_progress');
-  const urgentTasks = tasks.filter(
-    (t) => t.status !== 'done' && (isOverdue(t.dueDate) || isDueSoon(t.dueDate, 2) || t.priority === 'urgent')
-  ).slice(0, 5);
+export default function Home() {
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const router = useRouter()
 
-  const today = format(new Date(), 'yyyy년 M월 d일 EEEE', { locale: ko });
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null)
+    })
+  }, [])
 
-  const openDetail = (task: Task) => {
-    setSelectedTask(task);
-    setDetailOpen(true);
-  };
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
-  const handleEdit = (task: Task) => {
-    setDetailOpen(false);
-    setFormTask(task);
-    setFormOpen(true);
-  };
+  async function loadTasks() {
+    const res = await fetch('/api/tasks')
+    if (res.ok) setTasks(await res.json())
+    setLoading(false)
+  }
 
-  const handleSave = (data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (formTask) {
-      updateTask(formTask.id, data);
-    } else {
-      addTask(data);
+  useEffect(() => { loadTasks() }, [])
+
+  async function addTask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!title.trim()) return
+    setSubmitting(true)
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    })
+    if (res.ok) {
+      const created: Task = await res.json()
+      setTasks((prev) => [created, ...prev])
+      setTitle('')
     }
-    setFormTask(null);
-  };
+    setSubmitting(false)
+  }
 
-  const handleMove = (id: string, status: TaskStatus) => {
-    moveTask(id, status);
-    if (selectedTask?.id === id) {
-      setSelectedTask((prev) => prev ? { ...prev, status } : null);
+  async function toggleStatus(task: Task) {
+    const next = task.status === 'todo' ? 'done' : 'todo'
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next }),
+    })
+    if (res.ok) {
+      const updated: Task = await res.json()
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
     }
-  };
+  }
 
-  const getMember = (id: string | null) => members.find((m) => m.id === id);
+  async function deleteTask(id: string) {
+    const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
+    if (res.ok) setTasks((prev) => prev.filter((t) => t.id !== id))
+  }
 
   return (
-    <>
-      <Header
-        title="대시보드"
-        subtitle={today}
-        onNewTask={() => {
-          setFormTask(null);
-          setFormOpen(true);
-        }}
-      />
-
-      <div className="p-6 space-y-8 max-w-7xl">
-        {/* Stats */}
-        <DashboardStats tasks={tasks} />
-
-        {/* In Progress */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ClockIcon className="size-4 text-olive-600" />
-              <h2 className="text-base font-semibold text-foreground">진행 중인 일감</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-olive-100 text-olive-700 font-medium">
-                {inProgressTasks.length}
-              </span>
-            </div>
-            <Link href="/tasks">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs">
-                전체 보기
-                <ArrowRightIcon className="size-3.5 ml-1" />
-              </Button>
-            </Link>
+    <main className="min-h-screen bg-background px-4 py-10">
+      <div className="mx-auto max-w-2xl space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">팀 일감</h1>
+            <p className="mt-1 text-sm text-muted-foreground">내가 만들거나 내게 배정된 일감만 표시됩니다.</p>
           </div>
-
-          {inProgressTasks.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {inProgressTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  member={getMember(task.assigneeId)}
-                  onClick={() => openDetail(task)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-sm text-muted-foreground bg-white rounded-xl border border-border">
-              진행 중인 일감이 없습니다.
+          {email && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">{email}</span>
+              <button
+                onClick={handleLogout}
+                className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary"
+              >
+                로그아웃
+              </button>
             </div>
           )}
-        </section>
+        </div>
 
-        {/* Urgent / Due Soon */}
-        {urgentTasks.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <AlertCircleIcon className="size-4 text-red-500" />
-              <h2 className="text-base font-semibold text-foreground">주의가 필요한 일감</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-medium">
-                {urgentTasks.length}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {urgentTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  member={getMember(task.assigneeId)}
-                  onClick={() => openDetail(task)}
-                />
-              ))}
-            </div>
-          </section>
+        {/* 추가 폼 */}
+        <form onSubmit={addTask} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="새 일감 제목"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={submitting}
+            className="flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={!title.trim()}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            추가
+          </button>
+        </form>
+
+        {/* 일감 목록 */}
+        {loading ? (
+          <p className="text-sm text-muted-foreground">불러오는 중…</p>
+        ) : tasks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">등록된 일감이 없습니다.</p>
+        ) : (
+          <ul className="space-y-2">
+            {tasks.map((task) => (
+              <li
+                key={task.id}
+                className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3"
+              >
+                {/* 상태 토글 */}
+                <button
+                  onClick={() => toggleStatus(task)}
+                  title={task.status === 'todo' ? '완료로 변경' : '미완료로 변경'}
+                  className="shrink-0"
+                >
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      task.status === 'done'
+                        ? 'bg-olive-100 text-olive-700'
+                        : 'bg-secondary text-secondary-foreground'
+                    }`}
+                  >
+                    {task.status === 'done' ? '완료' : '진행 중'}
+                  </span>
+                </button>
+
+                {/* 제목 */}
+                <span
+                  className={`flex-1 text-sm ${
+                    task.status === 'done'
+                      ? 'text-muted-foreground line-through'
+                      : 'text-foreground'
+                  }`}
+                >
+                  {task.title}
+                </span>
+
+                {/* 삭제 */}
+                <button
+                  onClick={() => deleteTask(task.id)}
+                  title="삭제"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                  </svg>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-
-      <TaskDetail
-        task={selectedTask}
-        member={selectedTask ? getMember(selectedTask.assigneeId) : undefined}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        onEdit={handleEdit}
-        onDelete={deleteTask}
-        onMove={handleMove}
-      />
-
-      <TaskForm
-        open={formOpen}
-        onClose={() => {
-          setFormOpen(false);
-          setFormTask(null);
-        }}
-        onSave={handleSave}
-        members={members}
-        initial={formTask}
-      />
-    </>
-  );
+    </main>
+  )
 }
