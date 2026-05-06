@@ -14,7 +14,41 @@ npm run lint     # ESLint (eslint.config.mjs 기준)
 
 테스트 러너 없음.
 
-## Architecture
+## 도메인 용어
+
+| 용어 | 의미 | 코드 매핑 |
+|------|------|-----------|
+| 일감 | 팀원이 처리하는 작업 단위 | DB: `tasks` 테이블, TS: `Task` 타입 |
+| 담당자 | 일감을 배정받은 팀원 | DB: `assignee_id` (nullable) |
+| 상태 | 일감의 진행 단계 | DB: `status` text check, TS: `TaskStatus` |
+| 팀장 | 재배정 권한을 가진 역할 | IT 운영팀장 페르소나 |
+
+## 기술 스택과 아키텍처
+
+### 인프라 구성
+- 4개 부품: **Next.js**(프론트+API Routes) · **Supabase**(Postgres+Auth) · **Google OAuth** · **Vercel**
+- 메시지 큐·캐시·마이크로서비스 없음. 상세는 `docs/architecture.md` 참조.
+
+### DB
+- 단일 테이블 `tasks` (컬럼 6개: id · title · assignee_id · created_by · status · created_at)
+- `status`는 ENUM 아닌 `text check ('todo', 'done')`. 인덱스·트리거·RLS 없음.
+- 상세는 `docs/db.md` 참조.
+
+### API
+- base path `/api`, 버전 prefix 없음.
+- `/api/auth/*` 3개(login·callback·logout), `/api/tasks` + `/api/tasks/[id]` 4개.
+- `created_by`는 세션에서 자동 설정 — 클라이언트가 보내지 않음.
+- 상세는 `docs/api.md` 참조.
+
+### 제품 결정 규칙
+- **상태 변경**: 모든 팀원이 자신의 담당 일감 상태를 직접 변경 가능. 팀장 승인 불필요.
+- **재배정**: 팀장만 가능. 담당자 본인은 다른 팀원에게 넘길 수 없음.
+- **우선순위 변경**: 담당자 포함 모든 팀원이 직접 변경 가능.
+- **설명란**: 단순 덮어쓰기. 코멘트 이력 없음.
+- **기본 필터**: 앱 진입 시 담당자 필터 = "전체". "내 것" 자동 적용 없음.
+- **대시보드 통계**: 필터 상태와 무관하게 팀 전체 기준으로 집계.
+- **MVP 범위 밖**: 알림·에스컬레이션·온콜·SLA 엔진·외부 티켓 연동.
+- 상세는 `docs/requirements.md`, `docs/user-stories.md` 참조.
 
 ### 상태 관리
 전역 상태는 **Zustand** 단일 스토어(`src/lib/store.ts`)에서 관리한다. `persist` 미들웨어로 `localStorage` 키 `team-tasks-v1`에 저장된다. 컴포넌트는 `useTaskStore()`를 직접 호출하며, 별도 Context나 Provider 없이 동작한다.
