@@ -1,0 +1,34 @@
+{
+  "skill_name": "write-docs",
+  "evals": [
+    {
+      "id": 1,
+      "name": "eval-fresh-creation",
+      "prompt": "주차장 예약 관리 시스템 docs 전체 만들어줘. 주차 담당자랑 일반 직원 두 페르소나야. 스택은 Next.js + Supabase.",
+      "expected_output": "docs/ 폴더에 personas.md, user-stories.md, architecture.md, db.md, api.md 5개 파일이 모두 생성되고, 각 파일이 지정된 형식을 따르며 서로 일관성이 있어야 함",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "name": "eval-partial-creation",
+      "prompt": "docs 폴더에 personas.md랑 user-stories.md는 이미 있어. 아키텍처·DB·API 문서가 없으니까 기존 문서 참고해서 만들어줘.",
+      "expected_output": "기존 personas.md·user-stories.md를 읽고, 그 내용(주차 담당자·일반 직원 페르소나, 예약 시스템 도메인)을 반영한 architecture.md·db.md·api.md 3개만 생성",
+      "files": [
+        "eval-inputs/eval-2-partial/docs/personas.md",
+        "eval-inputs/eval-2-partial/docs/user-stories.md"
+      ],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "name": "eval-codebase-inference",
+      "prompt": "docs/ 없어. 도서관 도서 대출 관리 시스템인데, package.json 보고 스택 파악해서 docs 전체 만들어줘. 사서랑 대출자 페르소나야.",
+      "expected_output": "package.json(Next.js+Supabase 스택)을 읽어 architecture.md에 반영하고, 도서·대출·사용자 엔티티를 db.md에, 이에 대응하는 API를 api.md에 생성",
+      "files": [
+        "eval-inputs/eval-3-codebase/package.json"
+      ],
+      "assertions": []
+    }
+  ]
+}

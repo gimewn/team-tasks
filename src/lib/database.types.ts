@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string
+          display_name: string
+          emoji: string
+        }
+        Insert: {
+          id: string
+          display_name?: string
+          emoji?: string
+        }
+        Update: {
+          id?: string
+          display_name?: string
+          emoji?: string
+        }
+        Relationships: []
+      }
+      comments: {
+        Row: {
+          id: string
+          task_id: string
+          body: string
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          task_id: string
+          body: string
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          task_id?: string
+          body?: string
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "comments_task_id_fkey"; columns: ["task_id"]; referencedRelation: "tasks"; referencedColumns: ["id"] }
+        ]
+      }
       tasks: {
         Row: {
           assignee_id: string | null
