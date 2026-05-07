@@ -1,5 +1,8 @@
+// NOTE: 비인증 요청은 이 파일의 401 전에 middleware가 307(/login)로 redirect한다.
+// API 클라이언트는 redirect:'manual' 로 호출하거나 Cookie 헤더를 반드시 포함해야 한다.
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { buildTaskRecord } from '@/lib/tasks'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -25,18 +28,14 @@ export async function POST(request: NextRequest) {
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { title, assignee_id } = body
-  if (!title?.trim()) {
-    return Response.json({ error: 'title is required' }, { status: 400 })
+  const result = buildTaskRecord(body, user)
+  if (!result.ok) {
+    return Response.json({ error: result.error }, { status: result.status })
   }
 
   const { data, error } = await supabase
     .from('tasks')
-    .insert({
-      title: title.trim(),
-      created_by: user.id,
-      assignee_id: assignee_id ?? user.id,
-    })
+    .insert(result.record)
     .select()
     .single()
 

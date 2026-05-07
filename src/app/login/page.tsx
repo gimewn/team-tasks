@@ -1,9 +1,15 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
-  async function handleLogin() {
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+
+  async function handleGoogle() {
     const supabase = createClient()
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -11,6 +17,23 @@ export default function LoginPage() {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
+  }
+
+  async function handleEmail(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+    setPending(true)
+    const form = new FormData(e.currentTarget)
+    const email = form.get('email') as string
+    const password = form.get('password') as string
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setError(error.message)
+      setPending(false)
+      return
+    }
+    router.replace('/')
   }
 
   return (
@@ -30,7 +53,7 @@ export default function LoginPage() {
         </div>
 
         <button
-          onClick={handleLogin}
+          onClick={handleGoogle}
           className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-white px-5 py-3 text-sm font-semibold text-[#3c4043] shadow-sm hover:bg-[#f8f9fa] active:bg-[#f1f3f4] transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -41,6 +64,42 @@ export default function LoginPage() {
           </svg>
           Google로 계속하기
         </button>
+
+        <div className="relative flex items-center gap-3">
+          <div className="flex-1 border-t border-border" />
+          <span className="text-xs text-muted-foreground">또는</span>
+          <div className="flex-1 border-t border-border" />
+        </div>
+
+        <form onSubmit={handleEmail} className="space-y-3">
+          <input
+            data-testid="email-input"
+            type="email"
+            name="email"
+            placeholder="이메일"
+            required
+            className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <input
+            data-testid="password-input"
+            type="password"
+            name="password"
+            placeholder="비밀번호"
+            required
+            className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
+          <button
+            data-testid="email-login-submit"
+            type="submit"
+            disabled={pending}
+            className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 active:opacity-80 transition-opacity disabled:opacity-50"
+          >
+            {pending ? '로그인 중…' : 'Email로 로그인'}
+          </button>
+        </form>
 
         <p className="text-center text-xs text-muted-foreground">
           로그인 시 팀 일감 서비스 이용에 동의하게 됩니다 🍃
